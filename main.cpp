@@ -23,11 +23,18 @@
 
 static HANDLE PHANDLE = nullptr;
 
-// Populated in PLUGIN_INIT from plugin:hyprmono_wm:* config values.
-static int* PMINW = nullptr;
-static int* PMINH = nullptr;
-static int* PMAXW = nullptr;
-static int* PMAXH = nullptr;
+// Resize bounds. These were originally meant to be user-configurable via
+// HyprlandAPI::addConfigValue(), but that API takes/returns SConfigValue,
+// which is only forward-declared (not a complete type) in the current
+// PluginAPI.hpp -- it can't be constructed here without pulling in a lot
+// more of Hyprland's config machinery (Config::Values::IValue via
+// addConfigValueV2). Given these are just clamp bounds, plain constants
+// are simpler and avoid depending on an API surface that's still shifting.
+// Edit these directly if you want different bounds.
+static constexpr int MIN_WIDTH  = 200;
+static constexpr int MIN_HEIGHT = 150;
+static constexpr int MAX_WIDTH  = 3840;
+static constexpr int MAX_HEIGHT = 2160;
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -130,8 +137,8 @@ static SDispatchResult h_resizeRel(std::string arg) {
         return {.success = false, .error = "no active window"};
     }
 
-    const int newW = clampInt(win.w + dw, *PMINW, *PMAXW);
-    const int newH = clampInt(win.h + dh, *PMINH, *PMAXH);
+    const int newW = clampInt(win.w + dw, MIN_WIDTH, MAX_WIDTH);
+    const int newH = clampInt(win.h + dh, MIN_HEIGHT, MAX_HEIGHT);
 
     dispatch("resizewindowpixel exact " + std::to_string(newW) + " " + std::to_string(newH));
     return {.success = true};
@@ -148,8 +155,8 @@ static SDispatchResult h_resizeAbs(std::string arg) {
         return {.success = false, .error = "invalid dimensions"};
     }
 
-    w = clampInt(w, *PMINW, *PMAXW);
-    h = clampInt(h, *PMINH, *PMAXH);
+    w = clampInt(w, MIN_WIDTH, MAX_WIDTH);
+    h = clampInt(h, MIN_HEIGHT, MAX_HEIGHT);
 
     dispatch("resizewindowpixel exact " + std::to_string(w) + " " + std::to_string(h));
     return {.success = true};
@@ -275,27 +282,20 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
         throw std::runtime_error("[hyprmono-wm] Version mismatch");
     }
 
-    // Config values, same role as MIN_WIDTH/MIN_HEIGHT/MAX_WIDTH/MAX_HEIGHT
-    // in window-manager.sh. Override in hyprland.conf, e.g.:
-    //   plugin:hyprmono_wm:min_width = 300
-    HyprlandAPI::addConfigValue(PHANDLE, "plugin:hyprmono_wm:min_width",  SConfigValue{.intValue = 200});
-    HyprlandAPI::addConfigValue(PHANDLE, "plugin:hyprmono_wm:min_height", SConfigValue{.intValue = 150});
-    HyprlandAPI::addConfigValue(PHANDLE, "plugin:hyprmono_wm:max_width",  SConfigValue{.intValue = 3840});
-    HyprlandAPI::addConfigValue(PHANDLE, "plugin:hyprmono_wm:max_height", SConfigValue{.intValue = 2160});
+    // Resize bounds are plain constants (see MIN_WIDTH etc. above) rather
+    // than user-configurable plugin: config values -- see the comment there
+    // for why.
 
-    // Pointers are stable after PLUGIN_INIT returns -- cache them once.
-    PMINW = &HyprlandAPI::getConfigValue(PHANDLE, "plugin:hyprmono_wm:min_width")->intValue;
-    PMINH = &HyprlandAPI::getConfigValue(PHANDLE, "plugin:hyprmono_wm:min_height")->intValue;
-    PMAXW = &HyprlandAPI::getConfigValue(PHANDLE, "plugin:hyprmono_wm:max_width")->intValue;
-    PMAXH = &HyprlandAPI::getConfigValue(PHANDLE, "plugin:hyprmono_wm:max_height")->intValue;
-
-    HyprlandAPI::addDispatcher(PHANDLE, "hyprmono:resizerel", h_resizeRel);
-    HyprlandAPI::addDispatcher(PHANDLE, "hyprmono:resize",    h_resizeAbs);
-    HyprlandAPI::addDispatcher(PHANDLE, "hyprmono:center",    h_center);
-    HyprlandAPI::addDispatcher(PHANDLE, "hyprmono:expand",    h_expand);
-    HyprlandAPI::addDispatcher(PHANDLE, "hyprmono:snap",      h_snap);
-    HyprlandAPI::addDispatcher(PHANDLE, "hyprmono:lunar",     h_lunar);
-    HyprlandAPI::addDispatcher(PHANDLE, "hyprmono:info",      h_info);
+    // addDispatcher is deprecated in current Hyprland in favor of
+    // addDispatcherV2, which is what our handlers (returning SDispatchResult)
+    // are already written for.
+    HyprlandAPI::addDispatcherV2(PHANDLE, "hyprmono:resizerel", h_resizeRel);
+    HyprlandAPI::addDispatcherV2(PHANDLE, "hyprmono:resize",    h_resizeAbs);
+    HyprlandAPI::addDispatcherV2(PHANDLE, "hyprmono:center",    h_center);
+    HyprlandAPI::addDispatcherV2(PHANDLE, "hyprmono:expand",    h_expand);
+    HyprlandAPI::addDispatcherV2(PHANDLE, "hyprmono:snap",      h_snap);
+    HyprlandAPI::addDispatcherV2(PHANDLE, "hyprmono:lunar",     h_lunar);
+    HyprlandAPI::addDispatcherV2(PHANDLE, "hyprmono:info",      h_info);
 
     HyprlandAPI::addNotification(PHANDLE, "[hyprmono-wm] Loaded", CHyprColor{0.4, 0.9, 0.4, 1.0}, 3000);
 
