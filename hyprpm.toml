@@ -1,0 +1,11 @@
+[repository]
+name = "Window-managment"
+authors = ["s0uth09"]
+
+[hyprmono-wm]
+description = "Native resize/center/snap/expand dispatchers, ported from window-manager.sh"
+authors = ["s0uth09"]
+output = "Window-managment.so"
+build = [
+    "make all"
+]
