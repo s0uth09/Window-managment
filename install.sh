@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# install.sh -- build (and optionally install) the hyprmono-wm plugin
+# install.sh -- build (and optionally install) the winctl plugin
 #
 # Usage:
 #   ./install.sh              build only, print next-step instructions
 #   ./install.sh --test       build, then hyprctl-load it into your CURRENT
 #                             Hyprland session for testing (unloads on logout,
 #                             does not touch hyprland.conf)
-#   ./install.sh --install    build, copy the .so to ~/.local/share/hyprmono-wm/,
+#   ./install.sh --install    build, copy the .so to ~/.local/share/winctl/,
 #                             and add a `plugin = ...` line to hyprland.conf
 #                             (idempotent -- won't add the line twice)
 #
@@ -27,8 +27,8 @@ log_error()   { echo -e "\033[1;31m[FAIL]\033[0m $*" >&2; }
 # (see the discussion earlier in this repo about install-window-manager.sh's
 # ./relative-path bug -- same fix applied here from the start).
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PLUGIN_SO="$SCRIPT_DIR/hyprmono-wm.so"
-INSTALL_DIR="$HOME/.local/share/hyprmono-wm"
+PLUGIN_SO="$SCRIPT_DIR/winctl.so"
+INSTALL_DIR="$HOME/.local/share/winctl"
 HYPR_CONF="$HOME/.config/hypr/hyprland.conf"
 
 MODE="build"
@@ -70,7 +70,7 @@ fi
 log_success "Found hyprland pkg-config file: $(pkg-config --modversion hyprland 2>/dev/null || echo unknown version)"
 
 # --- Build ---------------------------------------------------------------
-log_info "Building hyprmono-wm.so..."
+log_info "Building winctl.so..."
 if ! make -C "$SCRIPT_DIR" clean all; then
     log_error "Build failed. If this is a C++ standard mismatch, edit"
     log_error "CXXSTD in Makefile to match the standard your Hyprland build uses."
@@ -106,7 +106,7 @@ if [[ "$MODE" == "test" ]]; then
         log_error "hyprctl plugin load failed -- check 'hyprctl plugin list' and your Hyprland log"
         exit 1
     fi
-    log_success "Loaded. Try: hyprctl dispatch hyprmono:info"
+    log_success "Loaded. Try: hyprctl dispatch winctl:info"
     log_info "This is NOT persisted across restarts. Use --install for that."
     exit 0
 fi
@@ -114,10 +114,10 @@ fi
 # --- Mode: permanent install -----------------------------------------------
 if [[ "$MODE" == "install" ]]; then
     mkdir -p "$INSTALL_DIR"
-    cp "$PLUGIN_SO" "$INSTALL_DIR/hyprmono-wm.so"
-    log_success "Copied plugin to $INSTALL_DIR/hyprmono-wm.so"
+    cp "$PLUGIN_SO" "$INSTALL_DIR/winctl.so"
+    log_success "Copied plugin to $INSTALL_DIR/winctl.so"
 
-    PLUGIN_LINE="plugin = $INSTALL_DIR/hyprmono-wm.so"
+    PLUGIN_LINE="plugin = $INSTALL_DIR/winctl.so"
 
     if [[ ! -f "$HYPR_CONF" ]]; then
         log_error "$HYPR_CONF not found -- create it first, or add this line yourself:"
@@ -130,7 +130,7 @@ if [[ "$MODE" == "install" ]]; then
     else
         {
             echo ""
-            echo "# hyprmono-wm: native resize/center/snap/expand dispatchers"
+            echo "# winctl: native resize/center/snap/expand dispatchers"
             echo "$PLUGIN_LINE"
         } >> "$HYPR_CONF"
         log_success "Added plugin line to $HYPR_CONF"

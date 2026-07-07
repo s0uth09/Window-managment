@@ -1,4 +1,4 @@
-PLUGIN_NAME := hyprmono-wm
+PLUGIN_NAME := winctl
 SRC         := main.cpp
 OUT         := $(PLUGIN_NAME).so
 

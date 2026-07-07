@@ -1,11 +1,11 @@
 [repository]
-name = "Window-managment"
-authors = ["s0uth09"]
+name = "winctl"
+authors = ["you"]
 
-[hyprmono-wm]
-description = "Native resize/center/snap/expand dispatchers, ported from window-manager.sh"
-authors = ["s0uth09"]
-output = "Window-managment.so"
+[winctl]
+description = "Native resize/center/snap/expand window dispatchers for Hyprland"
+authors = ["you"]
+output = "winctl.so"
 build = [
     "make all"
 ]

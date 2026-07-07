@@ -1,13 +1,10 @@
-// hyprmono-wm: native window resize/center/snap/expand dispatchers
-// Ported from window-manager.sh (bash + hyprctl) to a compiled Hyprland plugin.
+// winctl: native window resize/center/snap/expand dispatchers for Hyprland
 //
 // Design note: instead of reaching into Hyprland's internal CWindow/CCompositor
 // structs (which change frequently between releases and are explicitly called
 // out as fragile in the wiki's Advanced page), every read and mutation here
 // goes through HyprlandAPI::invokeHyprctlCommand(), i.e. the same stable path
-// `hyprctl` itself uses. This keeps the plugin close in spirit to the original
-// bash script (which also just shelled out to `hyprctl`/`jq`), just compiled
-// in instead of exec'd, and it should need less maintenance across Hyprland
+// `hyprctl` itself uses. That should need less maintenance across Hyprland
 // version bumps than a hook-based approach would.
 //
 // Verify HANDLE/SDispatchResult/invokeHyprctlCommand signatures against your
@@ -16,7 +13,6 @@
 
 #include <hyprland/src/plugins/PluginAPI.hpp>
 
-#include <algorithm>
 #include <regex>
 #include <sstream>
 #include <string>
@@ -47,7 +43,7 @@ static int clampInt(int v, int lo, int hi) {
 }
 
 static void notify(const std::string& msg, const CHyprColor& color, int ms = 3000) {
-    HyprlandAPI::addNotification(PHANDLE, "[hyprmono-wm] " + msg, color, ms);
+    HyprlandAPI::addNotification(PHANDLE, "[winctl] " + msg, color, ms);
 }
 
 static void notifyError(const std::string& msg) {
@@ -122,10 +118,10 @@ static bool getFocusedMonitorSize(int& w, int& h) {
 }
 
 // ---------------------------------------------------------------------------
-// Dispatchers -- one per window-manager.sh subcommand
+// Dispatchers
 // ---------------------------------------------------------------------------
 
-// hyprmono:resizerel <dw> <dh>
+// winctl:resizerel <dw> <dh>
 static SDispatchResult h_resizeRel(std::string arg) {
     std::istringstream ss(arg);
     int dw = 0, dh = 0;
@@ -144,14 +140,14 @@ static SDispatchResult h_resizeRel(std::string arg) {
     return {.success = true};
 }
 
-// hyprmono:resize <w> <h>
+// winctl:resize <w> <h>
 static SDispatchResult h_resizeAbs(std::string arg) {
     std::istringstream ss(arg);
     int w = 0, h = 0;
     ss >> w >> h;
 
     if (w <= 0 || h <= 0) {
-        notifyError("resize requires positive width/height, e.g. 'hyprmono:resize 1024 768'");
+        notifyError("resize requires positive width/height, e.g. 'winctl:resize 1024 768'");
         return {.success = false, .error = "invalid dimensions"};
     }
 
@@ -162,7 +158,7 @@ static SDispatchResult h_resizeAbs(std::string arg) {
     return {.success = true};
 }
 
-// hyprmono:center
+// winctl:center
 static SDispatchResult h_center(std::string) {
     auto win = getActiveWindow();
     int mw = 0, mh = 0;
@@ -178,7 +174,7 @@ static SDispatchResult h_center(std::string) {
     return {.success = true};
 }
 
-// hyprmono:expand
+// winctl:expand
 static SDispatchResult h_expand(std::string) {
     int mw = 0, mh = 0;
     if (!getFocusedMonitorSize(mw, mh)) {
@@ -191,7 +187,7 @@ static SDispatchResult h_expand(std::string) {
     return {.success = true};
 }
 
-// hyprmono:snap <tl|tr|bl|br|center> <w> <h>
+// winctl:snap <tl|tr|bl|br|center> <w> <h>
 static SDispatchResult h_snap(std::string arg) {
     std::istringstream ss(arg);
     std::string pos;
@@ -225,31 +221,10 @@ static SDispatchResult h_snap(std::string arg) {
     return {.success = true};
 }
 
-// hyprmono:lunar -- Lunar Client optimization preset
-static SDispatchResult h_lunar(std::string) {
-    auto win = getActiveWindow();
-    if (!win.valid) {
-        notifyError("No active window found");
-        return {.success = false, .error = "no active window"};
-    }
-
-    std::string clsLower = win.cls;
-    std::transform(clsLower.begin(), clsLower.end(), clsLower.begin(),
-                   [](unsigned char c) { return std::tolower(c); });
-
-    if (clsLower.find("lunar") == std::string::npos && clsLower.find("java") == std::string::npos)
-        notify("Active window doesn't look like Lunar Client (class: " + win.cls + ")",
-               CHyprColor{1.0, 0.8, 0.2, 1.0});
-
-    dispatch("resizewindowpixel exact 1024 768");
-    h_center(""); // re-center after resizing
-    notify("Lunar Client optimized to 1024x768", CHyprColor{0.4, 0.9, 0.4, 1.0});
-    return {.success = true};
-}
-
-// hyprmono:info -- shows a notification instead of piping to notify-send
-// (this also fixes the `| notify-send ... "$(cat)"` bug from the .conf file,
-// where $(cat) never actually captured the piped output)
+// winctl:info -- shows a notification instead of piping to notify-send
+// (this also fixes a `| notify-send ... "$(cat)"` pattern bug some configs
+// use, where $(cat) never actually captures the piped output, since command
+// substitution runs before the pipe connects the two commands)
 static SDispatchResult h_info(std::string) {
     auto win = getActiveWindow();
     if (!win.valid) {
@@ -277,9 +252,9 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
 
     // ALWAYS check this: prevents crashes from mismatched header versions.
     if (COMPOSITOR_HASH != CLIENT_HASH) {
-        HyprlandAPI::addNotification(PHANDLE, "[hyprmono-wm] Mismatched headers! Can't proceed.",
+        HyprlandAPI::addNotification(PHANDLE, "[winctl] Mismatched headers! Can't proceed.",
                                       CHyprColor{1.0, 0.2, 0.2, 1.0}, 5000);
-        throw std::runtime_error("[hyprmono-wm] Version mismatch");
+        throw std::runtime_error("[winctl] Version mismatch");
     }
 
     // Resize bounds are plain constants (see MIN_WIDTH etc. above) rather
@@ -289,19 +264,18 @@ APICALL EXPORT PLUGIN_DESCRIPTION_INFO PLUGIN_INIT(HANDLE handle) {
     // addDispatcher is deprecated in current Hyprland in favor of
     // addDispatcherV2, which is what our handlers (returning SDispatchResult)
     // are already written for.
-    HyprlandAPI::addDispatcherV2(PHANDLE, "hyprmono:resizerel", h_resizeRel);
-    HyprlandAPI::addDispatcherV2(PHANDLE, "hyprmono:resize",    h_resizeAbs);
-    HyprlandAPI::addDispatcherV2(PHANDLE, "hyprmono:center",    h_center);
-    HyprlandAPI::addDispatcherV2(PHANDLE, "hyprmono:expand",    h_expand);
-    HyprlandAPI::addDispatcherV2(PHANDLE, "hyprmono:snap",      h_snap);
-    HyprlandAPI::addDispatcherV2(PHANDLE, "hyprmono:lunar",     h_lunar);
-    HyprlandAPI::addDispatcherV2(PHANDLE, "hyprmono:info",      h_info);
+    HyprlandAPI::addDispatcherV2(PHANDLE, "winctl:resizerel", h_resizeRel);
+    HyprlandAPI::addDispatcherV2(PHANDLE, "winctl:resize",    h_resizeAbs);
+    HyprlandAPI::addDispatcherV2(PHANDLE, "winctl:center",    h_center);
+    HyprlandAPI::addDispatcherV2(PHANDLE, "winctl:expand",    h_expand);
+    HyprlandAPI::addDispatcherV2(PHANDLE, "winctl:snap",      h_snap);
+    HyprlandAPI::addDispatcherV2(PHANDLE, "winctl:info",      h_info);
 
-    HyprlandAPI::addNotification(PHANDLE, "[hyprmono-wm] Loaded", CHyprColor{0.4, 0.9, 0.4, 1.0}, 3000);
+    HyprlandAPI::addNotification(PHANDLE, "[winctl] Loaded", CHyprColor{0.4, 0.9, 0.4, 1.0}, 3000);
 
-    return {"hyprmono-wm",
-            "Native resize/center/snap/expand dispatchers, ported from window-manager.sh",
-            "s0uth09", "1.0"};
+    return {"winctl",
+            "Native resize/center/snap/expand window dispatchers for Hyprland",
+            "you", "1.0"};
 }
 
 // Hyprland automatically unregisters dispatchers/config values/hooks on
